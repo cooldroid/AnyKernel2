@@ -4,16 +4,15 @@
 ## AnyKernel setup
 # begin properties
 properties() {
-kernel.string=Flash Kernel for the OnePlus 5/T by @nathanchance
+kernel.string=Franco Kernel by franciscofranco @ xda-developers
 do.devicecheck=1
-do.modules=1
+do.modules=0
 do.cleanup=1
-do.cleanuponabort=0
+do.cleanuponabort=1
 device.name1=OnePlus5
-device.name2=OnePlus5T
-device.name3=cheeseburger
+device.name2=cheeseburger
+device.name3=OnePlus5T
 device.name4=dumpling
-device.name5=
 } # end properties
 
 # shell variables
@@ -30,13 +29,8 @@ ramdisk_compression=auto;
 ## AnyKernel file attributes
 # set permissions/ownership for included ramdisk files
 chmod -R 750 $ramdisk/*;
+chmod 644 $ramdisk/modules/*;
 chown -R root:root $ramdisk/*;
-
-# Mount system to get Android version and remove unneeded modules
-mount -o rw,remount -t auto /system;
-
-# Remove all non-wlan modules (they won't load anyways because we have MODULE_SIG enabled)
-find /system -iname '*.ko' ! -iname '*wlan*' -exec rm -rf {} \;
 
 # Alert of unsupported Android version
 android_ver=$(grep "^ro.build.version.release" /system/build.prop | cut -d= -f2);
@@ -48,9 +42,6 @@ ui_print " ";
 ui_print "Running Android $android_ver..."
 ui_print "This kernel is $support_status for this version!";
 
-# Unmount system
-mount -o ro,remount -t auto /system;
-
 if [ -f /tmp/anykernel/version ]; then
   ui_print " ";
   ui_print "Kernel version: $(cat /tmp/anykernel/version)";
@@ -61,12 +52,39 @@ dump_boot;
 
 # begin ramdisk changes
 
+# AnyKernel permissions
+chmod 755 $ramdisk/sbin/busybox
+chmod -R 755 $ramdisk/res/bc
+chmod -R 755 $ramdisk/res/misc
+
 # Set the default background app limit to 60
 insert_line default.prop "ro.sys.fw.bg_apps_limit=60" before "ro.secure=1" "ro.sys.fw.bg_apps_limit=60";
 
-# Disable sched_boost as it can hold cores at max frequency
-insert_line init.rc "sched_boost 0" after "on property:sys.boot_completed=1" "    write /proc/sys/kernel/sched_boost 0"
-insert_line init.rc "sched_boost 1" after "on property:sys.boot_completed=1" "    write /proc/sys/kernel/sched_boost 1"
+# sepolicy
+$bin/sepolicy-inject -s modprobe -t rootfs -c system -p module_load -P sepolicy;
+$bin/sepolicy-inject -s init -t vendor_file -c file -p mounton -P sepolicy;
+$bin/sepolicy-inject -s init -t system_file -c file -p mounton -P sepolicy;
+$bin/sepolicy-inject -s init -t rootfs -c file -p execute_no_trans -P sepolicy;
+$bin/sepolicy-inject -s init -t rootfs -c system -p module_load -P sepolicy;
+
+# sepolicy_debug
+$bin/sepolicy-inject -s modprobe -t rootfs -c system -p module_load -P sepolicy;
+$bin/sepolicy-inject -s init -t vendor_file -c file -p mounton -P sepolicy_debug;
+$bin/sepolicy-inject -s init -t system_file -c file -p mounton -P sepolicy_debug;
+$bin/sepolicy-inject -s init -t rootfs -c file -p execute_no_trans -P sepolicy_debug;
+$bin/sepolicy-inject -s modprobe -t rootfs -c system -p module_load -P sepolicy_debug;
+
+# systemless module load
+chmod 755 $ramdisk/modules
+find $ramdisk/modules -type f -exec chmod 644 {} \;
+ln -s /system/lib/modules/qca_cld3/qca_cld3_wlan.ko  $ramdisk/modules/wlan.ko
+insert_line plat_file_contexts "\/modules" after "\/res(\/.*)?		u:object_r:rootfs:s0" "\/modules(\/.*)?		u:object_r:system_file:s0"
+modblock='\n    restorecon_recursive \/modules'
+#for mod in $(ls $ramdisk/modules); do
+#  modblock="${modblock}\n    mount none /modules/${mod} /system/lib/modules/${mod} bind"
+#done
+modblock="${modblock}\n    mount none /modules /system/lib/modules bind"
+replace_string init.rc "\/modules" "trigger fs" "trigger fs$modblock";
 
 # end ramdisk changes
 
