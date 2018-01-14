@@ -4,16 +4,15 @@
 ## AnyKernel setup
 # begin properties
 properties() {
-kernel.string=Flash Kernel for the OnePlus 5/T by @nathanchance
+kernel.string=Franco Kernel by franciscofranco @ xda-developers
 do.devicecheck=1
 do.modules=0
 do.cleanup=1
-do.cleanuponabort=0
+do.cleanuponabort=1
 device.name1=OnePlus5
-device.name2=OnePlus5T
-device.name3=cheeseburger
+device.name2=cheeseburger
+device.name3=OnePlus5T
 device.name4=dumpling
-device.name5=
 } # end properties
 
 # shell variables
@@ -70,12 +69,15 @@ fi;
 dump_boot;
 
 # begin ramdisk changes
+rm $ramdisk/init.oem.early_boot.sh
+rm $ramdisk/init.oem.engineermode.sh
 
 # Set the default background app limit to 60
 insert_line default.prop "ro.sys.fw.bg_apps_limit=60" before "ro.secure=1" "ro.sys.fw.bg_apps_limit=60";
 
-# Import init.flash.rc file
-insert_line init.rc "init.flash.rc" after "import /init.usb.rc" "import /init.flash.rc";
+# init.rc
+insert_line init.rc "init.performance_profiles.rc" after "import /init.usb.rc" "import init.performance_profiles.rc";
+insert_line init.rc "init.blu_spark.rc" after "import /init.usb.rc" "import init.blu_spark.rc";
 
 # sepolicy
 $bin/sepolicy-inject -s init -t rootfs -c file -p execute_no_trans -P sepolicy;
@@ -95,7 +97,7 @@ $bin/sepolicy-inject -s modprobe -t rootfs -c system -p module_load -P sepolicy_
 
 # If on OOS, we need the support to load the Wi-Fi module
 if [ "$os" == "oos" ]; then
-  prepend_file init.flash.rc "modules" modules;
+  #prepend_file init.flash.rc "modules" modules;
 
   # Remove recovery service so that TWRP isn't overwritten
   remove_section init.rc "service flash_recovery" ""
