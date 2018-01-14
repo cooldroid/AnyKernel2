@@ -76,6 +76,18 @@ $bin/sepolicy-inject -s init -t vendor_configs_file -c file -p mounton -P sepoli
 $bin/sepolicy-inject -s init -t vendor_file -c file -p mounton -P sepolicy_debug;
 $bin/sepolicy-inject -s modprobe -t rootfs -c system -p module_load -P sepolicy_debug;
 
+# systemless module load
+rm -fr $ramdisk/res/modules
+mv /tmp/anykernel/modules/system/lib/modules $ramdisk/res/
+chmod 755 $ramdisk/res/modules
+find $ramdisk/res/modules -type f -exec chmod 644 {} \;
+insert_line plat_file_contexts "\/res\/modules" after "\/res(\/.*)?		u:object_r:rootfs:s0" "\/res\/modules(\/.*)?		u:object_r:system_file:s0"
+modblock='\n    restorecon_recursive \/res\/modules'
+for mod in $(ls $ramdisk/res/modules); do
+  modblock="${modblock}\n    mount none /res/modules/${mod} /system/lib/modules/${mod} bind"
+done
+replace_string init.rc "\/res\/modules" "trigger fs" "trigger fs$modblock";
+
 # end ramdisk changes
 
 write_boot;
