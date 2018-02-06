@@ -1,0 +1,30 @@
+##################################################################################
+### VENDOR_EDIT, OEM All rights reserved.
+###
+### File: - init.oem.debug.rc
+###
+### ------------------------------- Revision History: ----------------------------
+### <author>                        <data>       <version>   <desc>
+### ------------------------------------------------------------------------------
+##################################################################################
+
+
+##################################  Trigger Point Begin ###########################################
+
+on boot
+    # raw partition
+    chmod 0711 /sbin/self-init
+    mkdir /system/etc/param 0644 root root
+    write /sys/module/qpnp_power_on/parameters/pwr_dump_enabled 0
+    write /sys/module/msm_poweroff/parameters/download_mode 0
+    write /proc/restart_level_all 0
+    write /sys/class/power_supply/battery/is_aging_test 0
+
+on post-fs-data
+    mkdir /data/anr 0771 system system
+    mkdir /data/system/dropbox 0700 system system
+
+on charger
+    mount ext4 /dev/block/bootdevice/by-name/cache /cache
+
+##################################  Definitions of autochmod.sh End ###########################################

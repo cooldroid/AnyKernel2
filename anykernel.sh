@@ -30,8 +30,6 @@ ramdisk_compression=auto;
 ## AnyKernel file attributes
 # set permissions/ownership for included ramdisk files
 chmod -R 750 $ramdisk/*;
-chmod 644 $ramdisk/WCNSS_qcom_cfg.ini;
-chmod 644 $ramdisk/modules/*;
 chown -R root:root $ramdisk/*;
 
 # Alert of unsupported Android version
@@ -53,12 +51,20 @@ fi;
 dump_boot;
 
 # begin ramdisk changes
+rm $ramdisk/init.oem.early_boot.sh
+rm $ramdisk/init.oem.engineermode.sh
+chmod 755 $ramdisk/*.sh
+chmod 644 $ramdisk/*.rc
+chmod 775 $ramdisk/res
+mkdir -p $ramdisk/res/asset
+chmod 755 $ramdisk/res/busybox
+for i in $($ramdisk/res/busybox --list); do ln -s /res/busybox $ramdisk/res/asset/$i; done
+find $ramdisk/lib -type d -exec chmod 775 {} \;
+find $ramdisk/lib -type f -exec chmod 664 {} \;
+ln -s /persist/wlan_mac.bin $ramdisk/lib/firmware/overrides/wlan/qca_cld/wlan_mac.bin
 
 # Set the default background app limit to 60
 insert_line default.prop "ro.sys.fw.bg_apps_limit=60" before "ro.secure=1" "ro.sys.fw.bg_apps_limit=60";
-
-# Import init.flash.rc file
-insert_line init.rc "init.flash.rc" after "import /init.usb.rc" "import /init.flash.rc";
 
 # sepolicy
 $bin/sepolicy-inject -s init -t rootfs -c file -p execute_no_trans -P sepolicy;
@@ -66,7 +72,14 @@ $bin/sepolicy-inject -s init -t rootfs -c system -p module_load -P sepolicy;
 $bin/sepolicy-inject -s init -t system_file -c file -p mounton -P sepolicy;
 $bin/sepolicy-inject -s init -t vendor_configs_file -c file -p mounton -P sepolicy;
 $bin/sepolicy-inject -s init -t vendor_file -c file -p mounton -P sepolicy;
+$bin/sepolicy-inject -s init -t device -c lnk_file -p setattr -P sepolicy;
 $bin/sepolicy-inject -s modprobe -t rootfs -c system -p module_load -P sepolicy;
+$bin/sepolicy-inject -s shell -t kmsg_device -c chr_file -p read,write,open -P sepolicy;
+$bin/sepolicy-inject -s shell -t device -c dir -p read,write,open,add_name -P sepolicy;
+$bin/sepolicy-inject -s shell -t rootfs -c dir -p read,write,open,add_name -P sepolicy;
+$bin/sepolicy-inject -s shell -t vendor_file -c dir -p mounton -P sepolicy;
+$bin/sepolicy-inject -s shell -t sysfs -c file -p setattr -P sepolicy;
+$bin/sepolicy-inject -s shell -t shell -c capability -p chown,sys_admin -P sepolicy;
 
 # sepolicy_debug
 $bin/sepolicy-inject -s init -t rootfs -c file -p execute_no_trans -P sepolicy_debug;
@@ -74,19 +87,14 @@ $bin/sepolicy-inject -s init -t rootfs -c system -p module_load -P sepolicy_debu
 $bin/sepolicy-inject -s init -t system_file -c file -p mounton -P sepolicy_debug;
 $bin/sepolicy-inject -s init -t vendor_configs_file -c file -p mounton -P sepolicy_debug;
 $bin/sepolicy-inject -s init -t vendor_file -c file -p mounton -P sepolicy_debug;
+$bin/sepolicy-inject -s init -t device -c lnk_file -p setattr -P sepolicy_debug;
 $bin/sepolicy-inject -s modprobe -t rootfs -c system -p module_load -P sepolicy_debug;
-
-# systemless module load
-rm -fr $ramdisk/res/modules
-mv /tmp/anykernel/modules/system/lib/modules $ramdisk/res/
-chmod 755 $ramdisk/res/modules
-find $ramdisk/res/modules -type f -exec chmod 644 {} \;
-insert_line plat_file_contexts "\/res\/modules" after "\/res(\/.*)?		u:object_r:rootfs:s0" "\/res\/modules(\/.*)?		u:object_r:system_file:s0"
-modblock='\n    restorecon_recursive \/res\/modules'
-for mod in $(ls $ramdisk/res/modules); do
-  modblock="${modblock}\n    mount none /res/modules/${mod} /system/lib/modules/${mod} bind"
-done
-replace_string init.rc "\/res\/modules" "trigger fs" "trigger fs$modblock";
+$bin/sepolicy-inject -s shell -t kmsg_device -c chr_file -p read,write,open -P sepolicy_debug;
+$bin/sepolicy-inject -s shell -t device -c dir -p read,write,open,add_name -P sepolicy_debug;
+$bin/sepolicy-inject -s shell -t rootfs -c dir -p read,write,open,add_name -P sepolicy_debug;
+$bin/sepolicy-inject -s shell -t vendor_file -c dir -p mounton -P sepolicy_debug;
+$bin/sepolicy-inject -s shell -t sysfs -c file -p setattr -P sepolicy_debug;
+$bin/sepolicy-inject -s shell -t shell -c capability -p chown,sys_admin -P sepolicy_debug;
 
 # end ramdisk changes
 
